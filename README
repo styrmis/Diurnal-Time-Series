@@ -1,0 +1,1 @@
+This script (diurnal.py) takes two columns of delimited data, a time series on a per minute-basis, and arranges the data on a 2D array of minute data per day.
