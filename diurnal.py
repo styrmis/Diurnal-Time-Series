@@ -8,6 +8,13 @@ from datetime import timedelta
 import csv
 import math
 
+from optparse import OptionParser
+
+parser = OptionParser()
+parser.add_option("--hourly", action="store_true", dest="hourly")
+
+(options, args) = parser.parse_args()
+
 # This value will get filled in for any missing values in the data
 MISSING_VALUE = 'nan'
 
@@ -36,7 +43,7 @@ class DataPoint(object):
 
 # If running from the terminal, the code below will be run
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print "Usage: %s <path_to_csv_file>" % sys.argv[0]
         sys.exit(1)
     
@@ -96,13 +103,55 @@ if __name__ == "__main__":
         
         minutes_list.append(day_list)
     
+    minutes_list_transposed = zip(*minutes_list)
+    
+    # Calculate hourly data
+    hours_list_transposed = []
+    
+    for day in minutes_list_transposed:
+        hours_for_day = []
+        
+        for min_number in xrange(0, 24 * 60, 60):
+            # Get minute data points, excluding missing points
+            minute_points = [ x for x in day[min_number:min_number+60] if x != MISSING_VALUE ]
+            if len(minute_points) == 0:
+                hours_for_day.append((MISSING_VALUE, 0))
+            else:
+                # Interpret points as floating point numbers
+                minute_points_as_floats = [ float(x) for x in minute_points ]
+                hours_for_day.append((sum(minute_points_as_floats), len(minute_points_as_floats)))
+        
+        assert len(hours_for_day) == 24
+        hours_list_transposed.append(hours_for_day)
+    
+    hours_list = zip(*hours_list_transposed)
+    
+    weighted_hours_average = []
+    
+    for day in hours_list:
+        day_without_missing_values = [ x for x in day if x[0] != MISSING_VALUE ]
+
+        if len(day_without_missing_values) == 0:
+            weighted_hours_average.append(MISSING_VALUE)
+        else:
+            averages = [ total / n_points for total, n_points in day_without_missing_values ]
+            weights = [ x[1] for x in day_without_missing_values ]
+        
+            weighted_average = sum([ weight * mean for weight, mean in zip(averages, weights)]) / sum(weights)
+        
+            weighted_hours_average.append(weighted_average)
+    
+    writer = csv.writer(open('output_hourly_averaged.csv', 'w'))
+
+    writer.writerow(weighted_hours_average)
+
+    writer = csv.writer(open('output_hourly.csv', 'w'))
+    
+    for row in hours_list_transposed:
+        writer.writerow([ float(x[0]) / x[1] for x in row if x[0] != MISSING_VALUE ])
+
+    # Output minute data
     writer = csv.writer(open('output.csv', 'w'))
-    
-    writer.writerow([ d.strftime('%d/%m/%y') for d in days ])
-    
-    writer.writerows(minutes_list)
-    
-    writer = csv.writer(open('output_t.csv', 'w'))
-    
-    writer.writerows(zip(*minutes_list))
+
+    writer.writerows(minutes_list_transposed)
         
